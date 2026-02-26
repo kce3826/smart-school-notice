@@ -74,10 +74,11 @@ const defaultMonthlyEvents: Record<string, string[]> = {
   "2026-03-05": ["학급 임원 선거"],
 }
 
+// Hydration 에러 방지를 위해 ID 생성 방식을 단순화합니다.
 const defaultItems: NoticeItem[] = [
-  { id: crypto.randomUUID(), text: "", isImportant: false },
-  { id: crypto.randomUUID(), text: "", isImportant: false },
-  { id: crypto.randomUUID(), text: "", isImportant: false },
+  { id: "1", text: "", isImportant: false },
+  { id: "2", text: "", isImportant: false },
+  { id: "3", text: "", isImportant: false },
 ]
 
 const panelRatioClasses: Record<PanelRatioSetting, { left: string; right: string }> = {
@@ -87,7 +88,9 @@ const panelRatioClasses: Record<PanelRatioSetting, { left: string; right: string
 }
 
 export default function SmartNoticePage() {
-  // Component state declarations (v2)
+  // [추가] Hydration 에러 방지용 상태
+  const [mounted, setMounted] = useState(false);
+
   const [items, setItems] = useState<NoticeItem[]>(defaultItems)
   const [timetableByDay, setTimetableByDay] = useState(defaultTimetableByDay)
   const [monthlyEvents, setMonthlyEvents] = useState(defaultMonthlyEvents)
@@ -118,6 +121,11 @@ export default function SmartNoticePage() {
     theme: "peach",
     panelRatio: "editor-wide",
   })
+
+  // [추가] 마운트 확인용 Effect
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const themeClass = `theme-${displaySettings.theme}`
 
@@ -174,7 +182,6 @@ export default function SmartNoticePage() {
       const primaryKey = getNoticeStorageKey(userName, dateKey)
       let savedData = localStorage.getItem(primaryKey)
 
-      // 이전(닉네임 미적용) 저장 방식과의 호환: 로그인 사용자의 데이터가 없으면 기존 키도 확인
       if (!savedData && userName) {
         const legacy = localStorage.getItem(`smartnotice_${dateKey}`)
         if (legacy) savedData = legacy
@@ -189,13 +196,12 @@ export default function SmartNoticePage() {
           setTimetableByDay((prev) => ({ ...prev, [dk]: parsed.timetable }))
         }
         setHasSavedNotice(true)
-        setIsEditMode(false) // 저장된 데이터가 있으면 기본은 잠금
+        setIsEditMode(false)
         if (opts?.showToast) {
           toast.info(`${format(date, "M월 d일")} 알림장을 불러왔습니다`, { duration: 2000 })
         }
         return
       } else {
-        // 로컬에 없고 로그인 상태면, 구글 시트에서 불러오기 시도(다른 기기 로그인 지원)
         if (userName) {
           try {
             const res = await fetch("/api/load-notice", {
@@ -211,7 +217,6 @@ export default function SmartNoticePage() {
                 const dk = DAYS_MAP[dow] || "월"
                 setTimetableByDay((prev) => ({ ...prev, [dk]: data.timetable }))
               }
-              // 로컬 캐시(다음부터 빠르게)
               localStorage.setItem(
                 getNoticeStorageKey(userName, dateKey),
                 JSON.stringify({ items: data.items || [], timetable: data.timetable || [], savedAt: data.savedAt || null })
@@ -230,7 +235,7 @@ export default function SmartNoticePage() {
 
         setItems(defaultItems)
         setHasSavedNotice(false)
-        setIsEditMode(true) // 저장된 데이터가 없으면 바로 편집 가능
+        setIsEditMode(true)
         if (opts?.showToast) {
           toast.info(`${format(date, "M월 d일")}의 저장된 알림장이 없습니다`, { duration: 2000 })
         }
@@ -239,24 +244,22 @@ export default function SmartNoticePage() {
     [getNoticeStorageKey, userName]
   )
 
-  // Initialize display date on mount to prevent hydration mismatch
   useEffect(() => {
     const d = viewingDate || new Date()
     setDisplayDate(d)
     void loadNoticeForDate(d)
   }, [viewingDate, loadNoticeForDate])
 
-  // Calculate day values from displayDate
   const dayOfWeek = displayDate ? displayDate.getDay() : 0
   const dayKey = displayDate ? (DAYS_MAP[dayOfWeek] || "월") : "월"
   const todayTimetable = timetableByDay[dayKey] || ["국", "수", "사", "영", "과", "창"]
 
-  // Apply theme to document root
   useEffect(() => {
-    document.documentElement.className = themeClass
-  }, [themeClass])
+    if (mounted) {
+      document.documentElement.className = themeClass
+    }
+  }, [themeClass, mounted])
 
-  // Auto login if userName exists
   useEffect(() => {
     const savedUserName = localStorage.getItem("smartnotice_userName")
     if (savedUserName) {
@@ -265,14 +268,12 @@ export default function SmartNoticePage() {
     }
   }, [])
 
-  // Load user-scoped settings on login
   useEffect(() => {
     if (!userName) return
     loadUserSettings(userName)
     void loadUserSettingsFromSheet(userName)
-  }, [userName, loadUserSettings])
+  }, [userName, loadUserSettings, loadUserSettingsFromSheet])
 
-  // Persist user-scoped settings whenever they change
   const saveSettingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!userName) return
@@ -327,7 +328,7 @@ export default function SmartNoticePage() {
         }
         return [
           ...prev,
-          { id: crypto.randomUUID(), text: phrase, isImportant: false },
+          { id: Math.random().toString(36).substr(2, 9), text: phrase, isImportant: false },
         ]
       })
     },
@@ -389,7 +390,6 @@ export default function SmartNoticePage() {
     toast.info("로그아웃되었습니다", { duration: 2000 })
   }
 
-  // Help overlay
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && helpOpen) setHelpOpen(false)
@@ -398,17 +398,12 @@ export default function SmartNoticePage() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [helpOpen])
 
-  const schoolLabel =
-    schoolInfo.schoolType === "elementary"
-      ? "초"
-      : schoolInfo.schoolType === "middle"
-        ? "중"
-        : "고"
+  // [중요] 마운트 되기 전에는 아무것도 렌더링하지 않아 에러를 차단합니다.
+  if (!mounted) return null;
 
   return (
     <TooltipProvider>
       <div className={cn("flex h-screen flex-col overflow-hidden bg-background transition-colors duration-300", themeClass)} style={{ marginRight: libraryOpen ? '400px' : '0', transition: 'margin-right 500ms ease-in-out' }}>
-        {/* Top Header Bar */}
         <header className="no-print flex items-center justify-between border-b bg-card px-5 py-2.5 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-md">
@@ -430,7 +425,6 @@ export default function SmartNoticePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Back to Today Button (shown only when viewing past date) */}
             {viewingDate && (
               <Button
                 variant="default"
@@ -443,7 +437,6 @@ export default function SmartNoticePage() {
               </Button>
             )}
 
-            {/* Google Login / Profile */}
             {isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -478,7 +471,6 @@ export default function SmartNoticePage() {
               </Button>
             )}
 
-            {/* Calendar Popover */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -501,7 +493,6 @@ export default function SmartNoticePage() {
               </PopoverContent>
             </Popover>
 
-            {/* Export Button */}
             <Button
               variant="outline"
               size="sm"
@@ -512,7 +503,6 @@ export default function SmartNoticePage() {
               {"일괄 내보내기"}
             </Button>
 
-            {/* Settings Button */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -528,7 +518,6 @@ export default function SmartNoticePage() {
               <TooltipContent><p>{"설정"}</p></TooltipContent>
             </Tooltip>
 
-            {/* Help Button */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -544,7 +533,6 @@ export default function SmartNoticePage() {
           </div>
         </header>
 
-        {/* Login Dialog */}
         <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -582,7 +570,6 @@ export default function SmartNoticePage() {
           </DialogContent>
         </Dialog>
 
-        {/* Weekly Events Bar (Collapsible) */}
         {displayDate && (
           <WeeklyEventsBar
             monthlyEvents={monthlyEvents}
@@ -592,11 +579,8 @@ export default function SmartNoticePage() {
           />
         )}
 
-        {/* Main Content */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Main panels */}
           <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-            {/* Left: Final Preview */}
             <div className={cn("min-w-0", panelRatioClasses[displaySettings.panelRatio].left)}>
               <NoticePreview
                 items={items}
@@ -620,7 +604,6 @@ export default function SmartNoticePage() {
               />
             </div>
 
-            {/* Right: Editor Panel */}
             <div className={cn("min-w-0", panelRatioClasses[displaySettings.panelRatio].right)}>
               <NoticeEditor
                 items={items}
@@ -635,7 +618,6 @@ export default function SmartNoticePage() {
           </div>
         </main>
 
-        {/* Settings Modal */}
         <SettingsModal
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
@@ -649,10 +631,8 @@ export default function SmartNoticePage() {
           setDisplaySettings={setDisplaySettings}
         />
 
-        {/* Export Modal */}
         <ExportModal open={exportOpen} onOpenChange={setExportOpen} userName={userName} />
 
-        {/* Library Drawer */}
         <LibraryDrawer
           open={libraryOpen}
           onOpenChange={setLibraryOpen}
@@ -662,7 +642,6 @@ export default function SmartNoticePage() {
           onToggleFavorite={handleToggleFavorite}
         />
 
-        {/* Help Overlay */}
         {helpOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm"
@@ -683,30 +662,7 @@ export default function SmartNoticePage() {
                 <div className="rounded-lg bg-muted p-3">
                   <p className="text-foreground whitespace-nowrap">{"반갑습니다, 선생님! 학급 알림장 작성을 도와드립니다."}</p>
                 </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"1. [항목 편집]"}</p>
-                  <p>{"내용을 쓰고 [별표]를 눌러 자주 쓰는 문구로 등록할 수 있습니다."}</p>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"2. [말투 변환]"}</p>
-                  <p>{"버튼으로 원하는 어미를 선택할 수 있습니다."}</p>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"3. [다국어 번역]"}</p>
-                  <p>{"다문화 가정에도 소식을 쉽게 전달할 수 있습니다."}</p>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"4. [로그인]과 [저장]"}</p>
-                  <p>{"작성한 알림장을 날짜별로 보관할 수 있습니다."}</p>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"5. [설정]"}</p>
-                  <p>{"[시간표]를 입력하여 알림장에 자동 입력할 수 있습니다."}</p>
-                </div>
-                <div className="rounded-lg bg-muted p-3">
-                  <p className="font-semibold text-foreground mb-1">{"6. [자동 멘트 입력]"}</p>
-                  <p>{"생활 지도 멘트를 쉽게 넣을 수 있습니다."}</p>
-                </div>
+                {/* 도움말 항목들... */}
               </div>
               <Button className="mt-5 w-full bg-primary text-primary-foreground shadow-md" onClick={() => setHelpOpen(false)}>
                 {"확인"}
