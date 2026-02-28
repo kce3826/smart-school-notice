@@ -384,8 +384,8 @@ export function LibraryDrawer({ open, onOpenChange, onInsertPhrase, favorites, s
             {/* Category Sections */}
             {Object.entries(categories).map(([key, { icon, label, phrases }]) => (
               <AccordionItem key={key} value={key} className="border-b border-border">
-                <AccordionTrigger asChild className="hover:no-underline py-3">
-                  <div className="group flex w-full items-center gap-2">
+                <AccordionTrigger className="hover:no-underline py-3">
+                  <div className="group flex w-full items-center gap-2 text-left">
                     {icon}
                     {editingCategoryKey === key ? (
                       <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
