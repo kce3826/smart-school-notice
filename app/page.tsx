@@ -143,7 +143,7 @@ export default function SmartNoticePage() {
               setTimetable={(newT) => setTimetableByDay(prev => ({ ...prev, [dayKey]: newT }))}
               selectedDate={displayDate} fontSize={displaySettings.fontSize} schoolInfo={schoolInfo}
               isEditMode={isEditMode} setIsEditMode={setIsEditMode}
-              isViewingPastDate={!!viewingDate} // 👈 이 부분이 에러 해결 포인트입니다!
+              isViewingPastDate={!!viewingDate} //
               userName={userName} hasSavedNotice={hasSavedNotice}
               onSaved={() => { setHasSavedNotice(true); setIsEditMode(false); }}
             />
